@@ -1,0 +1,22 @@
+-module(db).
+-export([new/0,destroy/1,write/3,delete/2,read/2,match/2]).
+
+new()->[].
+destroy(Db)->ok.
+
+write(Key,Value,[])->[{Key,Value}];
+write(Key,Value,[{H,X}|T])->
+case H of
+Key->[{Key,Value}|T];
+Other->[{H,X}]++write(Key,Value,T)
+end.
+
+delete(Key,Db)->[{X,Y}||{X,Y}<-Db,{X,Y}/={Key,Y}].
+
+read(Key,[])->{error,not_found};
+read(Key,[{Key,V}|T])->{ok,V};
+read(Key,[{H,V}|T])->read(Key,T).
+
+match(Element,[])->[];
+match(Element,[{Key,Element}|T])->[Key]++match(Element,T);
+match(Element,[{Key,El}|T])->match(Element,T).
