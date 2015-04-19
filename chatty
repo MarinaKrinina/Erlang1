@@ -1,0 +1,47 @@
+-module(chatty).
+-compile(export_all).
+
+start()->
+	Pid=spawn(chatty,server,[[]]),
+	register(chat,Pid).
+			
+send_message([],Node,Message)->ok;
+send_message([{Pid,N}|T],Node,Message)->
+	Pid!{Message,Node},
+	send_message(T,Node,Message).
+
+send_stop([{Pid,Node}|T],Node)-> Pid!{stop};
+send_stop([{Pid,N}|T],Node)->send_stop(T,Node).
+
+server(H)->
+	receive
+		{Pid,Node,plus}->
+			server(H++[{Pid,Node}]);  
+		{Node,minus}->
+			send_stop(H,Node),
+			server([{X,Y}||{X,Y}<-H,Y/=Node]);
+		{Pid,Node,Message}->
+			send_message(H,Node,Message),
+			server(H);
+      	{stop}-> ok
+	end.
+	
+connect(Node)->	
+	Pid=spawn(chatty,loop,[]),
+	{chat,Node}!{Pid,node(),plus}.
+
+disconnect(Node)->
+	{chat,Node}!{node(),minus}.
+
+send(Node,Message)->
+	{chat,Node}!{self(),node(),Message}.
+
+loop()->
+	receive
+		{Message,Node}->
+			io:format("~w: ~w~n",[Node,Message]),
+			loop();
+		{stop}->ok
+		end.
+	
+stop(Node)->{chat,Node}!{stop}.
