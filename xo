@@ -1,0 +1,191 @@
+-module(xo).
+-behavior(gen_server).
+%-export([start/0,st/0,hod/2,connect/0]).
+%-export([init/1,handle_call/3,handle_cast/2,handle_info/2,terminate/2,code_change/3]).
+-compile(export_all).
+
+start()->
+	gen_server:start_link({global,?MODULE},?MODULE,[],[]).
+init([])->
+	H1=[],
+	H2=[],
+	H3=[],
+	State={0,H1,H2,H3},
+	{ok,State}.
+
+st()->
+	gen_server:call({global,?MODULE},{new_game}).
+
+hod(Num,Cell)->
+	gen_server:call({global,?MODULE},{hod,Num,Cell}).
+	
+connect()->	
+	Pid=spawn(xo,loop,[]),
+	gen_server:call({global,?MODULE},{pid,Pid}).
+	
+poiskreceive([Num|T],Num)->
+	{T,1};
+poiskreceive([Num1|T],Num)->
+	{[Num1|T],0};
+poiskreceive([],Num)->
+	{[],0}.
+loop()->
+	receive
+		{Num,you_lost}->
+			io:format("~w: ~w~n",[Num,you_lost]),
+			loop();
+		{Num,nichia}->
+			io:format("~w: ~w~n",[Num,nichia]),
+			loop();
+		{Num,P11,P22,Ans}->
+			io:format("~w: ~n",[Num]),
+			{A,B}=poiskreceive(P11,1),
+			{A1,B1}=poiskreceive(P22,1),
+			{C,D}=poiskreceive(A,2),
+			{C1,D1}=poiskreceive(A1,2),
+			{E,F}=poiskreceive(C,3),
+			{E1,F1}=poiskreceive(C1,3),
+			{G,H}=poiskreceive(E,4),
+			{G1,H1}=poiskreceive(E1,4),
+			{J,K}=poiskreceive(G,5),
+			{J1,K1}=poiskreceive(G1,5),
+			{L,M}=poiskreceive(J,6),
+			{L1,M1}=poiskreceive(J1,6),
+			{N,O}=poiskreceive(L,7),
+			{N1,O1}=poiskreceive(L1,7),
+			{P,R}=poiskreceive(N,8),
+			{P1,R1}=poiskreceive(N1,8),
+			{S,T}=poiskreceive(P,9),
+			{S1,T1}=poiskreceive(P1,9),
+			if B==1 -> io:format("    X  ");
+			   B1==1->io:format("    0  ");
+			   true->io:format("    *  ")
+			end,
+			if D==1 -> io:format("    X  ");
+			   D1==1->io:format("    0  ");
+			   true->io:format("    *  ")
+			end,
+			if F==1 -> io:format("    X~n");
+			   F1==1->io:format("    0~n");
+			   true->io:format("    *~n")
+			end,
+			if H==1 -> io:format("    X  ");
+			   H1==1->io:format("    0  ");
+			   true->io:format("    *  ")
+			end,
+			if K==1 -> io:format("    X  ");
+			   K1==1->io:format("    0  ");
+			   true->io:format("    *  ")
+			end,
+			if M==1 -> io:format("    X~n");
+			   M1==1->io:format("    0~n");
+			   true->io:format("    *~n")
+			end,
+			if O==1 -> io:format("    X  ");
+			   O1==1->io:format("    0  ");
+			   true->io:format("    *  ")
+			end,
+			if R==1 -> io:format("    X  ");
+			   R1==1->io:format("    0  ");
+			   true->io:format("    *  ")
+			end,
+			if T==1 -> io:format("    X~n");
+			   T1==1->io:format("    0~n");
+			   true->io:format("    *~n")
+			end,
+	    	io:format("~w~n",[Ans]),
+			loop()
+		end.
+	
+handle_call({pid,Pid},{From,_F},{Num,H1,H2,H3})->
+	NewState={Num,H1,H2,H3++[{From,Pid}]},
+	{reply,ok,NewState};
+handle_call({new_game},{From,_F},{Num,H1,H2,H3})->
+	if H1==[]->
+		NewState={Num,H1++[From],H2,H3},
+		%{noreply,NewState};
+		{reply,<<"">>,NewState};
+	true->
+		[Pid|T]=H1,
+		if Pid/=From->
+			NewState={Num+1,T,H2++[{Num,From,Pid,{[],[]}}],H3},
+			{reply,{Num,your_hod},NewState};
+		true->
+			NewState={Num,H1++[From],H2,H3},
+			%{noreply,NewState}
+			{reply,<<"">>,NewState}
+		end
+	end;
+	
+handle_call({hod,Num,Cell},{From,_F},{Num1,H1,H,H3})->
+	Ans=find(H,Num,From),
+	if Ans=={no}->{reply,{Num,no_such_game},{Num1,H1,H,H3}};
+		Ans=={two}->{reply,{Num,not_your_hod},{Num1,H1,H,H3}};
+		true->
+			{one,Pid,{P1,P2}}=Ans,
+			Win=proverka(lists:sort(P1++[Cell])),
+			Pidans=pidans(H3,Pid),
+			if Win==1->
+					%ответ на Pid
+					Pidans!{Num,you_lost},
+					NewState={Num1,H1,[{X,Y,Z,{X1,X2}}||{X,Y,Z,{X1,X2}}<-H,X/=Num],H3},
+					{reply,{Num,you_win},NewState};
+				Win==0->
+					%ответ на Pid
+					Pidans!{Num,nichia},
+					NewState={Num1,H1,[{X,Y,Z,{X1,X2}}||{X,Y,Z,{X1,X2}}<-H,X/=Num],H3},
+					{reply,{Num,nichia},NewState};
+				Win==2->
+					%ответ на Pid
+					Pidans!{Num,lists:sort(P1++[Cell]),lists:sort(P2),your_hod},
+					Fromans=pidans(H3,From),
+					Fromans!{Num,lists:sort(P1++[Cell]),lists:sort(P2),wait_hod},
+					NewH=[{X,Y,Z,{X1,X2}}||{X,Y,Z,{X1,X2}}<-H,X/=Num],
+					NewState={Num1,H1,NewH++[{Num,Pid,From,{P2,P1++[Cell]}}],H3},
+					%{noreply,NewState}
+					{reply,<<"">>,NewState}
+				end
+		end.
+
+pidans([{Pid,P}|T],Pid)->P;
+pidans([{Pid1,P}|T],Pid)->pidans(T,Pid).
+		
+find([{Num,Pid,Pid1,Pole}|T],Num,Pid)->{one,Pid1,Pole};
+find([{Num,Pid1,Pid,Pole}|T],Num,Pid)->{two};
+find([],Num,Pid)->{no};
+find([H|T],Num,Pid)->find(T,Num,Pid).
+
+f([H|T],[H|T1])->1+f(T,T1);
+f([H|T],[H1|T1])->f(T,[H1|T1]);
+f([],H)->0;
+f(H,[])->0;
+f([],[])->0.
+
+proverka(H)->
+H1=f(H,[1,2,3]),
+H2=f(H,[4,5,6]),
+H3=f(H,[7,8,9]),
+H4=f(H,[1,4,7]),
+H5=f(H,[2,5,8]),
+H6=f(H,[3,6,9]),
+H7=f(H,[1,5,9]),
+H8=f(H,[3,5,7]),
+Count=countelem(H),
+	if H1==3->1;
+		H2==3->1;
+		H3==3->1;
+		H4==3->1;
+		H5==3->1;
+		H6==3->1;
+		H7==3->1;
+		H8==3->1;
+	   Count==5->0;
+	   true->2
+	end.
+countelem([H|T])->1+countelem(T);
+countelem([])->0.					
+	
+handle_cast(_Message,State)-> {noreply,State}.
+handle_info(_Message,State)->{noreply,State}.
+terminate(_Reason,_State)->ok.
+code_change(_OldVerson,State,_Extra)->{ok,State}.
